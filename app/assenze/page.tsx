@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 interface Persona {
   id: number;
@@ -22,6 +23,9 @@ interface Assenza {
 const TIPOLOGIE_ASSENZA = ["Chiusura Aziendale", "Ferie", "Permesso", "Malattia", "Altro"];
 
 export default function AssenzePage() {
+  const { user } = useAuth();
+  const isAdmin = user?.position === 'Administrator';
+
   const [assenze, setAssenze] = useState<Assenza[]>([]);
   const [persone, setPersone] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +91,7 @@ export default function AssenzePage() {
     } else {
       setCurrentAssenza(null);
       setFormData({
-        person_id: "",
+        person_id: !isAdmin && user ? user.id.toString() : "",
         type: "Ferie",
         start_date: prefillDate,
         end_date: "",
@@ -112,6 +116,19 @@ export default function AssenzePage() {
       hours: formData.type === "Permesso" ? Number(formData.hours) : null,
     };
 
+    if (!isAdmin && user) {
+      if (currentAssenza) {
+        const { error } = await supabase.from("Absences").update({ ...payload, person_id: user.id }).eq("id", currentAssenza.id);
+        if (error) alert("Errore durante l'aggiornamento: " + error.message);
+      } else {
+        const { error } = await supabase.from("Absences").insert([{ ...payload, person_id: user.id }]);
+        if (error) alert("Errore durante l'inserimento: " + error.message);
+      }
+      setIsFormOpen(false);
+      fetchData();
+      return;
+    }
+
     if (currentAssenza) {
       const personId = formData.type === "Chiusura Aziendale" || !formData.person_id ? null : Number(formData.person_id);
       const { error } = await supabase.from("Absences").update({ ...payload, person_id: personId }).eq("id", currentAssenza.id);
@@ -130,11 +147,11 @@ export default function AssenzePage() {
             }))
           : [{ ...payload, person_id: null, type: formData.type }];
 
-        const { error } = await supabase.from("Absences").insert(payloads);
+        const { error } = await supabase.from("Absences").insert(payloads as any);
         if (error) return alert("Errore durante l'inserimento: " + error.message);
       } else {
         const personId = !formData.person_id ? null : Number(formData.person_id);
-        const { error } = await supabase.from("Absences").insert([{ ...payload, person_id: personId }]);
+        const { error } = await supabase.from("Absences").insert([{ ...payload, person_id: personId } as any]);
         if (error) alert("Errore durante l'inserimento: " + error.message);
       }
     }
@@ -445,14 +462,14 @@ export default function AssenzePage() {
                   }}
                   className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 bg-white"
                 >
-                  {TIPOLOGIE_ASSENZA.map((tipo) => (
+                  {(isAdmin ? TIPOLOGIE_ASSENZA : TIPOLOGIE_ASSENZA.filter(t => t !== "Chiusura Aziendale")).map((tipo) => (
                     <option key={tipo} value={tipo}>{tipo}</option>
                   ))}
                 </select>
               </div>
 
               {/* Mostra il campo Gruppo + checkbox per Ferie e Chiusura Aziendale in creazione */}
-              {((formData.type === "Ferie" || formData.type === "Chiusura Aziendale") && !currentAssenza) ? (
+              {isAdmin && ((formData.type === "Ferie" || formData.type === "Chiusura Aziendale") && !currentAssenza) ? (
                 <>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Gruppo</label>
@@ -505,7 +522,7 @@ export default function AssenzePage() {
                     <p className="text-sm text-gray-500">Se non selezioni persone, la chiusura verrà applicata a tutta l'azienda.</p>
                   ) : null}
                 </>
-              ) : formData.type !== "Chiusura Aziendale" ? (
+              ) : isAdmin && formData.type !== "Chiusura Aziendale" ? (
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Persona</label>
                   <select

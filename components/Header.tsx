@@ -1,19 +1,32 @@
 "use client";
 import Link from 'next/link';
 import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const { user, logout } = useAuth();
 
-  const links = [
-    { href: '/masterplan', label: 'Masterplan' },
-    { href: '/persone', label: 'Persone' },
-    { href: '/assenze', label: 'Assenze' },
-    { href: '/progetti', label: 'Progetti' },
-    { href: '/copertura/dev', label: 'Copertura Dev' },
-    { href: '/copertura/bugfix', label: 'Copertura Bugfix' },
-    { href: '/copertura/team-leading', label: 'Team Leading' },
+  const isAdmin = user?.position === 'Administrator';
+
+  const allLinks = [
+    { href: '/masterplan', label: 'Masterplan', adminOnly: false },
+    { href: '/persone', label: 'Persone', adminOnly: true },
+    { href: '/assenze', label: 'Assenze', adminOnly: false },
+    { href: '/progetti', label: 'Progetti', adminOnly: true },
+    { href: '/copertura/dev', label: 'Copertura Dev', adminOnly: false },
+    { href: '/copertura/bugfix', label: 'Copertura Bugfix', adminOnly: false },
+    { href: '/copertura/team-leading', label: 'Team Leading', adminOnly: true },
   ];
+
+  const links = allLinks.filter(l => isAdmin || !l.adminOnly);
+
+  const getInitials = (name: string) => {
+    if (!name) return "UI";
+    const parts = name.split(" ");
+    if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
 
   return (
     <header className="bg-white/60 backdrop-blur-md sticky top-0 z-50 border-b">
@@ -60,9 +73,17 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 bg-white border rounded-full px-3 py-1 shadow-sm hover:shadow-md transition">
-            <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center">LD</div>
-            <div className="hidden sm:block text-sm text-slate-600">Luigi</div>
+          <div className="flex items-center gap-2 bg-white border rounded-full px-3 py-1 shadow-sm transition">
+            <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-semibold text-sm">
+              {getInitials(user?.name || "")}
+            </div>
+            <div className="hidden sm:block text-sm text-slate-600">
+              <div className="font-medium leading-tight">{user?.name || "Utente"}</div>
+              <div className="text-[10px] uppercase text-slate-400 leading-tight">{user?.position || "User"}</div>
+            </div>
+          </div>
+          <button onClick={logout} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1">
+            Esci
           </button>
         </div>
       </div>

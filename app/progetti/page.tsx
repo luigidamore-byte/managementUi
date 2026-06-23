@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 // Interfaccia del Progetto aggiornata al nuovo database
 interface Progetto {
@@ -35,6 +36,9 @@ interface MasterplanPhase {
 }
 
 export default function ProgettiPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.position === 'Administrator';
+
   const [progetti, setProgetti] = useState<Progetto[]>([]);
   const [releases, setReleases] = useState<Release[]>([]);
   const [masterplan, setMasterplan] = useState<MasterplanPhase[]>([]);
@@ -95,16 +99,15 @@ export default function ProgettiPage() {
   const openFormModal = (progetto: Progetto | null = null) => {
     if (progetto) {
       setCurrentProgetto(progetto);
-      const conv = (md?: number, h?: number) => (h ?? (md ? md * 8 : 0));
       setFormData({
         name: progetto.name,
         release_id: progetto.release_id?.toString() || "",
-        dev_effort_h: conv(progetto.dev_effort, progetto.dev_effort_h).toString(),
-        bugfix_effort_h: conv(progetto.bugfix_effort, progetto.bugfix_effort_h).toString(),
-        tl_effort_h: conv(progetto.tl_effort, progetto.tl_effort_h).toString(),
-        dev_remaining_h: (progetto.dev_remaining_h ?? conv(progetto.dev_effort, progetto.dev_effort_h)).toString(),
-        bugfix_remaining_h: (progetto.bugfix_remaining_h ?? conv(progetto.bugfix_effort, progetto.bugfix_effort_h)).toString(),
-        tl_remaining_h: (progetto.tl_remaining_h ?? conv(progetto.tl_effort, progetto.tl_effort_h)).toString(),
+        dev_effort_h: (progetto.dev_effort_h ?? 0).toString(),
+        bugfix_effort_h: (progetto.bugfix_effort_h ?? 0).toString(),
+        tl_effort_h: (progetto.tl_effort_h ?? 0).toString(),
+        dev_remaining_h: (progetto.dev_remaining_h ?? progetto.dev_effort_h ?? 0).toString(),
+        bugfix_remaining_h: (progetto.bugfix_remaining_h ?? progetto.bugfix_effort_h ?? 0).toString(),
+        tl_remaining_h: (progetto.tl_remaining_h ?? progetto.tl_effort_h ?? 0).toString(),
       });
     } else {
       setCurrentProgetto(null);
@@ -114,6 +117,9 @@ export default function ProgettiPage() {
         dev_effort_h: "",
         bugfix_effort_h: "",
         tl_effort_h: "",
+        dev_remaining_h: "",
+        bugfix_remaining_h: "",
+        tl_remaining_h: "",
       });
     }
     setIsFormOpen(true);
@@ -233,6 +239,15 @@ export default function ProgettiPage() {
     );
   };
 
+  if (!isAdmin) {
+    return (
+      <div className="max-w-6xl mx-auto p-4 text-center mt-20">
+        <h1 className="text-2xl font-bold text-red-600 mb-2">Accesso Negato</h1>
+        <p className="text-gray-600">Non hai i permessi per visualizzare questa pagina.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -292,9 +307,9 @@ export default function ProgettiPage() {
                     </td>
 
                     {(() => {
-                      const devHours = p.dev_effort_h ?? (p.dev_effort ? p.dev_effort * 8 : 0);
-                      const bugHours = p.bugfix_effort_h ?? (p.bugfix_effort ? p.bugfix_effort * 8 : 0);
-                      const tlHours = p.tl_effort_h ?? (p.tl_effort ? p.tl_effort * 8 : 0);
+                      const devHours = p.dev_effort_h ?? 0;
+                      const bugHours = p.bugfix_effort_h ?? 0;
+                      const tlHours = p.tl_effort_h ?? 0;
                       const devRem = p.dev_remaining_h ?? devHours;
                       const bugRem = p.bugfix_remaining_h ?? bugHours;
                       const tlRem = p.tl_remaining_h ?? tlHours;

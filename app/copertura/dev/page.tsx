@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 interface Progetto {
   id: number;
@@ -37,6 +38,9 @@ interface MasterplanPhase {
 }
 
 export default function Dev() {
+  const { user } = useAuth();
+  const isAdmin = user?.position === 'Administrator';
+
   const [progetti, setProgetti] = useState<Progetto[]>([]);
   const [releases, setReleases] = useState<Release[]>([]);
   const [masterplan, setMasterplan] = useState<MasterplanPhase[]>([]);
@@ -82,7 +86,16 @@ export default function Dev() {
         .order("id", { ascending: true });
 
       if (progettiError) console.error("Errore progetti:", progettiError);
-      else setProgetti(progettiData || []);
+      else {
+        if (!isAdmin && user) {
+          const filtered = (progettiData || []).filter(p => 
+            (p.developer_ids && p.developer_ids.includes(user.id)) || p.developer_id === user.id
+          );
+          setProgetti(filtered);
+        } else {
+          setProgetti(progettiData || []);
+        }
+      }
 
       setLoading(false);
     };
@@ -205,7 +218,7 @@ export default function Dev() {
 
     const { error: insertErr } = await supabase
       .from("TimeLogs")
-      .insert([{ person_id: null, project_id: currentLogProject.id, type: "Dev", hours, note: logForm.note }]);
+      .insert([{ person_id: user?.id || null, project_id: currentLogProject.id, type: "Dev", hours, note: logForm.note }]);
 
     if (insertErr) {
       await supabase
@@ -224,7 +237,16 @@ export default function Dev() {
       .select("*")
       .order("id", { ascending: true });
     if (progettiError) console.error("Errore progetti:", progettiError);
-    else setProgetti(progettiData || []);
+    else {
+      if (!isAdmin && user) {
+        const filtered = (progettiData || []).filter(p => 
+          (p.developer_ids && p.developer_ids.includes(user.id)) || p.developer_id === user.id
+        );
+        setProgetti(filtered);
+      } else {
+        setProgetti(progettiData || []);
+      }
+    }
   };
 
   return (
@@ -307,13 +329,15 @@ export default function Dev() {
                       >
                         Registra ore
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => openAssignModal(progetto)}
-                        className="text-indigo-600 hover:text-indigo-700 font-semibold"
-                      >
-                        Assegna DEV
-                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => openAssignModal(progetto)}
+                          className="text-indigo-600 hover:text-indigo-700 font-semibold ml-4"
+                        >
+                          Assegna DEV
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

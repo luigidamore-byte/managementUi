@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 // Interfacce aggiornate coi nomi esatti del tuo DB
 interface Persona {
@@ -9,6 +10,10 @@ interface Persona {
   name: string;
   role: number; // Ora è un numero (Foreign Key)
   group: string;
+  username?: string;
+  password?: string;
+  brand?: string;
+  position?: string;
 }
 
 interface Ruolo {
@@ -29,7 +34,10 @@ export default function PersonePage() {
   const [logForm, setLogForm] = useState({ project_id: "", type: "Dev", hours: "", note: "" });
 
   // formData usa i nomi in inglese. "role" lo teniamo come stringa temporanea per la tendina <select>
-  const [formData, setFormData] = useState({ name: "", role: "", group: "" });
+  const [formData, setFormData] = useState({ name: "", role: "", group: "", username: "", password: "", brand: "", position: "" });
+
+  const { user } = useAuth();
+  const isAdmin = user?.position === 'Administrator';
 
   const fetchData = async () => {
     setLoading(true);
@@ -74,7 +82,11 @@ export default function PersonePage() {
       setFormData({ 
         name: persona.name, 
         role: persona.role.toString(), // Convertiamo in stringa per la tendina
-        group: persona.group 
+        group: persona.group,
+        username: persona.username || "",
+        password: persona.password || "",
+        brand: persona.brand || "",
+        position: persona.position || ""
       });
     } else {
       setCurrentPersona(null);
@@ -82,7 +94,11 @@ export default function PersonePage() {
       setFormData({ 
         name: "", 
         role: "", 
-        group: "" 
+        group: "",
+        username: "",
+        password: "",
+        brand: "",
+        position: ""
       });
     }
     setIsFormOpen(true);
@@ -101,7 +117,11 @@ export default function PersonePage() {
     const payload = {
       name: formData.name,
       role: Number(formData.role), 
-      group: formData.group
+      group: formData.group,
+      username: formData.username,
+      password: formData.password,
+      brand: formData.brand,
+      position: formData.position
     };
 
     if (currentPersona) {
@@ -150,6 +170,15 @@ export default function PersonePage() {
     return ruoloTrovato ? ruoloTrovato.nome : "Sconosciuto";
   };
 
+  if (!isAdmin) {
+    return (
+      <div className="max-w-5xl mx-auto p-4 text-center mt-20">
+        <h1 className="text-2xl font-bold text-red-600 mb-2">Accesso Negato</h1>
+        <p className="text-gray-600">Non hai i permessi per visualizzare questa pagina.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -176,8 +205,11 @@ export default function PersonePage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Nome</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Username</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Ruolo</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Posizione</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Gruppo</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Brand</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase text-right">Azioni</th>
               </tr>
             </thead>
@@ -185,13 +217,16 @@ export default function PersonePage() {
               {persone.map((p) => (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.username || "-"}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {/* Usiamo la funzione per stampare il Nome del ruolo invece dell'ID */}
                     <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
                       {getNomeRuolo(p.role)}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.position || "-"}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.group}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.brand || "-"}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right space-x-3">
                     <button onClick={() => openFormModal(p)} className="text-amber-600 hover:text-amber-700 transition-colors">Modifica</button>
                     <button onClick={() => openDeleteModal(p)} className="text-red-600 hover:text-red-700 transition-colors">Elimina</button>
@@ -207,49 +242,100 @@ export default function PersonePage() {
       {/* --- POPUP INSERIMENTO / MODIFICA --- */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4 relative border">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 m-4 relative border">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {currentPersona ? "Modifica Persona" : "Nuova Persona"}
             </h2>
             <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Nome Completo</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Es. Mario Rossi"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Ruolo</label>
-                <select
-                  required
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="" disabled>Seleziona un ruolo...</option>
-                  {/* Salviamo l'ID del ruolo (r.id) come valore, ma mostriamo il nome (r.nome) all'utente */}
-                  {ruoli.map((r) => (
-                    <option key={r.id} value={r.id}>{r.nome}</option>
-                  ))}
-                </select>
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Nome Completo</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Es. Mario Rossi"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Username</label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Es. mario.rossi"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Gruppo</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.group}
-                  onChange={(e) => setFormData({ ...formData, group: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Es. Team Alpha, Frontend, ecc."
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Password</label>
+                  <input
+                    type="text"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Brand</label>
+                  <select
+                    value={formData.brand}
+                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="" disabled>Seleziona brand...</option>
+                    <option value="Oakley">Oakley</option>
+                    <option value="Altro">Altro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Posizione (Position)</label>
+                  <select
+                    value={formData.position}
+                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="" disabled>Seleziona posizione...</option>
+                    <option value="Administrator">Administrator</option>
+                    <option value="User">User</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Ruolo</label>
+                  <select
+                    required
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="" disabled>Seleziona un ruolo...</option>
+                    {ruoli.map((r) => (
+                      <option key={r.id} value={r.id}>{r.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Gruppo</label>
+                  <select
+                    required
+                    value={formData.group}
+                    onChange={(e) => setFormData({ ...formData, group: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="" disabled>Seleziona gruppo...</option>
+                    <option value="Progetti">Progetti</option>
+                    <option value="AM">AM</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex justify-end space-x-3 pt-2">

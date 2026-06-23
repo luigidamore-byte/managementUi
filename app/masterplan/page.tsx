@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 // 1. Interfacce aggiornate al nuovo schema del DB
 interface Release {
@@ -39,6 +40,9 @@ const getEmptyPhases = () => {
 };
 
 export default function MasterplanPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.position === 'Administrator';
+
   const [releases, setReleases] = useState<Release[]>([]);
   const [masterplan, setMasterplan] = useState<MasterplanPhase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,6 +253,7 @@ export default function MasterplanPage() {
     return `${day}/${month}/${year}`;
   };
 
+
   return (
     <div className="max-w-7xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -256,15 +261,17 @@ export default function MasterplanPage() {
           <h1 className="text-2xl font-bold text-gray-800">Masterplan Release</h1>
           <p className="text-gray-500 text-sm">Contenitori di progetto e fasi temporali. Oggi è il <span className="font-bold text-indigo-600">{formattaData(today)}</span></p>
         </div>
-        <button
-          onClick={() => {
-            setReleaseFormPhases(getEmptyPhases());
-            setIsReleaseFormOpen(true);
-          }}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow"
-        >
-          + Nuova Release
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setReleaseFormPhases(getEmptyPhases());
+              setIsReleaseFormOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow"
+          >
+            + Nuova Release
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -288,12 +295,14 @@ export default function MasterplanPage() {
                     </h2>
                     <p className="text-sm text-gray-500">Data Rilascio Finale: {formattaData(release.release_date) || "Da definire"}</p>
                   </div>
-                  <button
-                    onClick={() => openEditPhaseForm(release)}
-                    className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
-                  >
-                    Gestisci Fasi
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => openEditPhaseForm(release)}
+                      className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Gestisci Fasi
+                    </button>
+                  )}
                 </div>
 
                 {releasePhases.length === 0 ? (
