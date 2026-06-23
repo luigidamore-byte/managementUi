@@ -20,6 +20,26 @@ interface MasterplanPhase {
   release_id: number; // Ora punta alla Release, non più al Progetto
 }
 
+interface Project {
+  id: number;
+  name: string;
+  release_id?: number;
+  dev_effort_h?: number;
+  dev_effort?: number;
+}
+
+interface PhaseProject extends Project {
+  initialEffort: number;
+  loggedHours: number;
+  remainingHours: number;
+}
+
+interface TimeLog {
+  project_id: number;
+  type: string;
+  hours: number;
+}
+
 const PREDEFINED_PHASES = [
   "Analisi Funzionale",
   "Analisi Tecnica",
@@ -46,6 +66,14 @@ export default function MasterplanPage() {
   const [releases, setReleases] = useState<Release[]>([]);
   const [masterplan, setMasterplan] = useState<MasterplanPhase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPhaseProjectsOpen, setIsPhaseProjectsOpen] = useState(false);
+  const [phasePopupRelease, setPhasePopupRelease] = useState<Release | null>(null);
+  const [phasePopupPhase, setPhasePopupPhase] = useState<MasterplanPhase | null>(null);
+  const [phasePopupProjects, setPhasePopupProjects] = useState<PhaseProject[]>([]);
+  const [phasePopupLoading, setPhasePopupLoading] = useState(false);
+  const [phasePopupTotalInitial, setPhasePopupTotalInitial] = useState(0);
+  const [phasePopupTotalLogged, setPhasePopupTotalLogged] = useState(0);
+  const [phasePopupTotalRemaining, setPhasePopupTotalRemaining] = useState(0);
 
   // --- STATI PER LA GESTIONE FASI (MODIFICA) ---
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
@@ -172,6 +200,66 @@ export default function MasterplanPage() {
 
     setIsEditFormOpen(false);
     fetchData();
+  };
+
+  const handleOpenPhaseProjectsPopup = async (release: Release, phase: MasterplanPhase) => {
+    setPhasePopupRelease(release);
+    setPhasePopupPhase(phase);
+    setIsPhaseProjectsOpen(true);
+    setPhasePopupLoading(true);
+    setPhasePopupProjects([]);
+    setPhasePopupTotalInitial(0);
+    setPhasePopupTotalLogged(0);
+    setPhasePopupTotalRemaining(0);
+
+    const { data: projectsData, error: projectsError } = await supabase
+      .from("Project")
+      .select("id,name,release_id,dev_effort_h,dev_effort")
+      .eq("release_id", release.id);
+
+    if (projectsError) {
+      console.error("Errore progetti fase:", projectsError);
+      setPhasePopupLoading(false);
+      return;
+    }
+
+    const projectIds = (projectsData || []).map((project) => project.id);
+    let logsData: TimeLog[] = [];
+
+    if (projectIds.length > 0) {
+      const { data: logs, error: logsError } = await supabase
+        .from("TimeLogs")
+        .select("project_id, type, hours")
+        .in("project_id", projectIds)
+        .eq("type", "Dev");
+
+      if (logsError) {
+        console.error("Errore time logs:", logsError);
+      } else {
+        logsData = logs || [];
+      }
+    }
+
+    const summary = (projectsData || []).map((project) => {
+      const initialEffort = project.dev_effort_h ?? (project.dev_effort ? project.dev_effort * 8 : 0);
+      const loggedHours = logsData
+        .filter((log) => log.project_id === project.id)
+        .reduce((sum, log) => sum + (log.hours ?? 0), 0);
+      const remainingHours = Math.max(initialEffort - loggedHours, 0);
+
+      return {
+        ...project,
+        initialEffort,
+        loggedHours,
+        remainingHours,
+      };
+    });
+
+    setPhasePopupProjects(summary);
+    setPhasePopupTotalInitial(summary.reduce((sum, project) => sum + project.initialEffort, 0));
+    setPhasePopupTotalLogged(summary.reduce((sum, project) => sum + project.loggedHours, 0));
+    setPhasePopupTotalRemaining(summary.reduce((sum, project) => sum + project.remainingHours, 0));
+    setPhasePopupLoading(false);
   };
 
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -318,7 +406,10 @@ export default function MasterplanPage() {
                       return (
                         <div 
                           key={phase.id} 
-                          className={`flex flex-col p-2 rounded border text-sm ${
+                          role={phase.phase_name === "Sviluppo" ? "button" : undefined}
+                          tabIndex={phase.phase_name === "Sviluppo" ? 0 : undefined}
+                          onClick={phase.phase_name === "Sviluppo" ? () => handleOpenPhaseProjectsPopup(release, phase) : undefined}
+                          className={`flex flex-col p-2 rounded border text-sm ${phase.phase_name === "Sviluppo" ? "cursor-pointer hover:ring-2 hover:ring-indigo-300" : ""} ${
                             isCurrentPhase 
                               ? "bg-green-100 border-green-400 text-green-900 shadow-sm ring-1 ring-green-400"
                               : isPastPhase 
@@ -334,6 +425,9 @@ export default function MasterplanPage() {
                             <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/80 border border-green-300 px-2 py-1 text-[11px] font-semibold text-green-900">
                               {getRemainingWorkdays(phase)} giorni lavorativi rimanenti
                             </span>
+                          )}
+                          {phase.phase_name === "Sviluppo" && (
+                            <span className="mt-2 text-[11px] font-semibold text-indigo-700">Clicca per visualizzare i progetti</span>
                           )}
                         </div>
                       );
@@ -431,6 +525,63 @@ export default function MasterplanPage() {
                 <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors">Aggiorna Fasi</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isPhaseProjectsOpen && phasePopupRelease && phasePopupPhase && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-60 animate-fadeIn overflow-y-auto py-10">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full p-6 m-4 relative border">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Progetti release {phasePopupRelease.name}</h2>
+                <p className="text-sm text-gray-500">Fase: {phasePopupPhase.phase_name} — Fine fase: {formattaData(phasePopupPhase.end_date)}</p>
+                <p className="text-sm text-gray-500">Ore lavorative rimanenti fino alla fine della fase: {(getRemainingWorkdays(phasePopupPhase) * 8).toFixed(2)} h</p>
+              </div>
+              <button type="button" onClick={() => setIsPhaseProjectsOpen(false)} className="text-gray-500 hover:text-gray-900">Chiudi</button>
+            </div>
+            {phasePopupLoading ? (
+              <p className="text-gray-500">Caricamento progetti...</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4 text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border">
+                  <div>Ore iniziali</div>
+                  <div>Ore loggate</div>
+                  <div>Ore rimanenti</div>
+                </div>
+                {phasePopupProjects.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nessun progetto associato a questa release.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 font-semibold text-gray-600">Progetto</th>
+                          <th className="px-4 py-2 font-semibold text-gray-600">Ore iniziali</th>
+                          <th className="px-4 py-2 font-semibold text-gray-600">Ore loggate</th>
+                          <th className="px-4 py-2 font-semibold text-gray-600">Ore rimanenti</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {phasePopupProjects.map((project) => (
+                          <tr key={project.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-800">{project.name}</td>
+                            <td className="px-4 py-3 text-gray-700">{project.initialEffort.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-gray-700">{project.loggedHours.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-gray-700">{project.remainingHours.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-4 text-sm text-gray-700 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                  <div className="font-semibold">Totale: {phasePopupTotalInitial.toFixed(2)} h</div>
+                  <div className="font-semibold">Loggate: {phasePopupTotalLogged.toFixed(2)} h</div>
+                  <div className="font-semibold">Rimanenti: {phasePopupTotalRemaining.toFixed(2)} h</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
