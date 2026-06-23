@@ -89,7 +89,7 @@ export default function Bugfix() {
       if (progettiError) console.error("Errore progetti:", progettiError);
       else {
         if (!isAdmin && user) {
-          const filtered = (progettiData || []).filter(p => 
+          const filtered = (progettiData || []).filter(p =>
             p.bugfix_developer_ids && p.bugfix_developer_ids.includes(user.id)
           );
           setProgetti(filtered);
@@ -194,7 +194,7 @@ export default function Bugfix() {
     if (!currentLogProject) return;
 
     const hours = Number(logForm.hours);
-    if (!hours || hours <= 0) {
+    if (!hours || hours < 0) {
       alert("Inserisci un valore ore valido");
       return;
     }
@@ -202,8 +202,8 @@ export default function Bugfix() {
     const initialEffort = currentLogProject.bugfix_effort_h ?? (currentLogProject.bugfix_effort ? currentLogProject.bugfix_effort * 8 : 0);
     const newRemaining = initialEffort - hours;
 
-    if (newRemaining <= 0) {
-      alert("Non puoi registrare ore che azzerano o superano il bugfix effort iniziale.");
+    if (newRemaining < 0) {
+      alert("Non puoi registrare ore che superano il bugfix effort iniziale.");
       return;
     }
 
@@ -240,7 +240,7 @@ export default function Bugfix() {
     if (progettiError) console.error("Errore progetti:", progettiError);
     else {
       if (!isAdmin && user) {
-        const filtered = (progettiData || []).filter(p => 
+        const filtered = (progettiData || []).filter(p =>
           p.bugfix_developer_ids && p.bugfix_developer_ids.includes(user.id)
         );
         setProgetti(filtered);

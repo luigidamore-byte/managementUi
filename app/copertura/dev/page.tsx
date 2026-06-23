@@ -88,7 +88,7 @@ export default function Dev() {
       if (progettiError) console.error("Errore progetti:", progettiError);
       else {
         if (!isAdmin && user) {
-          const filtered = (progettiData || []).filter(p => 
+          const filtered = (progettiData || []).filter(p =>
             (p.developer_ids && p.developer_ids.includes(user.id)) || p.developer_id === user.id
           );
           setProgetti(filtered);
@@ -193,7 +193,7 @@ export default function Dev() {
     if (!currentLogProject) return;
 
     const hours = Number(logForm.hours);
-    if (!hours || hours <= 0) {
+    if (!hours || hours < 0) {
       alert("Inserisci un valore ore valido");
       return;
     }
@@ -201,8 +201,8 @@ export default function Dev() {
     const initialEffort = currentLogProject.dev_effort_h ?? (currentLogProject.dev_effort ? currentLogProject.dev_effort * 8 : 0);
     const newRemaining = initialEffort - hours;
 
-    if (newRemaining <= 0) {
-      alert("Non puoi registrare ore che azzerano o superano il dev effort iniziale.");
+    if (newRemaining < 0) {
+      alert("Non puoi registrare ore che superano il dev effort iniziale.");
       return;
     }
 
@@ -239,7 +239,7 @@ export default function Dev() {
     if (progettiError) console.error("Errore progetti:", progettiError);
     else {
       if (!isAdmin && user) {
-        const filtered = (progettiData || []).filter(p => 
+        const filtered = (progettiData || []).filter(p =>
           (p.developer_ids && p.developer_ids.includes(user.id)) || p.developer_id === user.id
         );
         setProgetti(filtered);

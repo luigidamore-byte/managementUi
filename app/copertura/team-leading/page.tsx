@@ -182,7 +182,7 @@ export default function TeamLeading() {
     if (!currentLogProject) return;
 
     const hours = Number(logForm.hours);
-    if (!hours || hours <= 0) {
+    if (!hours || hours < 0) {
       alert("Inserisci un valore ore valido");
       return;
     }
@@ -190,8 +190,8 @@ export default function TeamLeading() {
     const initialEffort = currentLogProject.tl_effort_h ?? (currentLogProject.tl_effort ? currentLogProject.tl_effort * 8 : 0);
     const newRemaining = initialEffort - hours;
 
-    if (newRemaining <= 0) {
-      alert("Non puoi registrare ore che azzerano o superano il TL effort iniziale.");
+    if (newRemaining < 0) {
+      alert("Non puoi registrare ore che superano il TL effort iniziale.");
       return;
     }
 
