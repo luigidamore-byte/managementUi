@@ -39,6 +39,7 @@ interface MasterplanPhase {
 
 export default function Dev() {
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const isAdmin = user?.position === 'Administrator';
 
   const [progetti, setProgetti] = useState<Progetto[]>([]);
@@ -87,9 +88,9 @@ export default function Dev() {
 
       if (progettiError) console.error("Errore progetti:", progettiError);
       else {
-        if (!isAdmin && user) {
+        if (!isAdmin && userId !== null) {
           const filtered = (progettiData || []).filter(p =>
-            (p.developer_ids && p.developer_ids.includes(user.id)) || p.developer_id === user.id
+            (p.developer_ids && p.developer_ids.includes(userId)) || p.developer_id === userId
           );
           setProgetti(filtered);
         } else {
@@ -101,7 +102,7 @@ export default function Dev() {
     };
 
     fetchData();
-  }, []);
+  }, [isAdmin, userId]);
 
   const formattaData = (dataString: string | undefined) => {
     if (!dataString) return "-";
@@ -114,6 +115,25 @@ export default function Dev() {
     const fixed = Number(val).toFixed(2);
     const trimmed = fixed.replace(/\.0+$|(?<=\.[0-9]*?)0+$/g, "");
     return `${trimmed} h`;
+  };
+
+  const calculateWorkingDaysUntil = (endDateString?: string) => {
+    if (!endDateString) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(`${endDateString}T00:00:00`);
+    if (endDate < today) return 0;
+
+    let days = 0;
+    const cursor = new Date(today);
+    while (cursor <= endDate) {
+      const dayOfWeek = cursor.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        days += 1;
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
   };
 
   const getReleaseInfo = (releaseId?: number) => {
@@ -134,14 +154,38 @@ export default function Dev() {
     const firstPhaseStart = phases[0].start_date;
     const lastPhaseEnd = phases[phases.length - 1].end_date;
 
-    if (today < firstPhaseStart) return { label: "Pianificato", endDate: formattaData(phases[0].end_date) };
-    if (today > lastPhaseEnd) return { label: "Completato", endDate: formattaData(lastPhaseEnd) };
+    if (today < firstPhaseStart) {
+      return {
+        label: "Pianificato",
+        endDate: formattaData(phases[0].end_date),
+        rawEndDate: phases[0].end_date,
+      };
+    }
+    if (today > lastPhaseEnd) {
+      return {
+        label: "Completato",
+        endDate: formattaData(lastPhaseEnd),
+        rawEndDate: lastPhaseEnd,
+      };
+    }
 
     const activePhase = phases.find((phase) => today >= phase.start_date && today <= phase.end_date);
-    if (activePhase) return { label: activePhase.phase_name, endDate: formattaData(activePhase.end_date) };
+    if (activePhase) {
+      return {
+        label: activePhase.phase_name,
+        endDate: formattaData(activePhase.end_date),
+        rawEndDate: activePhase.end_date,
+      };
+    }
 
     const nextPhase = phases.find((phase) => today < phase.start_date);
-    return nextPhase ? { label: `Tra ${nextPhase.phase_name}`, endDate: formattaData(nextPhase.end_date) } : { label: "In corso" };
+    return nextPhase
+      ? {
+          label: `Tra ${nextPhase.phase_name}`,
+          endDate: formattaData(nextPhase.end_date),
+          rawEndDate: nextPhase.end_date,
+        }
+      : { label: "In corso" };
   };
 
   const getAssignedDevelopers = (project: Progetto) => {
@@ -270,6 +314,7 @@ export default function Dev() {
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Nome Progetto</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Release Madre</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Stato</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Giorni lavorativi</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Dev assegnati</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Dev Effort (h)</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Dev Remaining (h)</th>
@@ -304,6 +349,13 @@ export default function Dev() {
                             {status.endDate && <span className="text-[10px] font-normal text-blue-900">{status.endDate}</span>}
                           </div>
                         );
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {(() => {
+                        const status = getReleaseStatus(progetto.release_id);
+                        const days = calculateWorkingDaysUntil(status.rawEndDate);
+                        return days === null ? "-" : `${days} gg`;
                       })()}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
